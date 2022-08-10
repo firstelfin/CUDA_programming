@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// ¶¨ÒåÒªÔËËãµÄ»ù±¾³£Á¿
+// ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½Ä»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 const double EPSILON = 1.0e-15;
 const double a = 1.23;
 const double b = 2.34;
@@ -15,9 +15,9 @@ int main(void)
 {
 	const int N = 1e8;
 	const int M = sizeof(double) * N;
-	const *x = (double *) malloc(M);
-	const *y = (double *) malloc(M);
-	const *z = (double *) malloc(M);
+	double  *x = (double *) malloc(M);
+	double  *y = (double *) malloc(M);
+	double  *z = (double *) malloc(M);
 	for (int n = 0; n < N; ++n)
 	{
 		x[n] = a;
@@ -49,5 +49,5 @@ void check(const double* z, const int N)
 			has_error = true;
 		}
 	}
-	printf("s%\n", has_error ? "Has errors" : "No errors");
+	printf("%s\n" , has_error ? "Has errors" : "No errors");
 }
