@@ -202,6 +202,73 @@ CUDA Error:
 
 这里不写同步函数也可以捕捉到异常，因为后面数据传输函数隐式同步了主机与设备。一般情况下要获得精确的出错位置，还是显示的同步，如使用`cudaDeviceSynchronize()`，或者使用环境变量`export CUDA_LAUNCH_BLOCKING=1`。这样设置环境变量后所有的核函数调用都是同步的，但是这非常影响性能，所以建议还是老实用上面的两条语句。
 
+---
+
+<p align="right">
+    <b><a href="#top">Top</a></b>
+	&nbsp;<b>---</b>&nbsp;
+	<b><a href="#bottom">Bottom</a></b>
+</p>
+
+# 4.2 用CUDA-MEMCHECK检查内存错误
+
+CUDA提供了一个CUDA-MEMCHECK工具，包括memcheck、racecheck、initcheck、synccheck共四个工具。它们可以由可执行文件cuda-memcheck调用：
+
+```shell
+$ cuda-memcheck --tool memcheck [options] app_name [options]
+$ cuda-memcheck --tool racecheck [options] app_name [options]
+$ cuda-memcheck --tool initcheck [options] app_name [options]
+$ cuda-memcheck --tool synccheck [options] app_name [options]
+```
+
+对于memcheck工具，可以简化为：
+
+```shell
+$ cuda-memcheck  [options] app_name [options]
+```
+
+
+
+**内存错误案例**
+
+我们将check1api.cu的数据传输方向修改为正常，并修改`const int N = 1e8+1;`，以造成内存错误。
+
+```shell
+$ nvcc -arch=sm_86 memcheck1.cu -o check3
+$ ./check3
+Has errors
+```
+
+这里到底是哪里有问题，我们根本不知道，所以现在使用CUDA-MEMCHECK检查内存工具：
+
+```shell
+$ cuda-memcheck --tool memcheck ./check3
+……
+CUDA Error: 
+    file:   memcheck1.cu
+    line:   36
+    Error code: 719
+    Error text: unspecified launch failure
+========= Program hit cudaErrorLaunchFailure (error 719) due to "unspecified launch failure" on CUDA API call to cudaMemcpy.
+=========     Saved host backtrace up to driver entry point at error
+=========     Host Frame:/usr/lib/x86_64-linux-gnu/libcuda.so.1 [0x3bd253]
+=========     Host Frame:./check3 [0x5b71d]
+=========     Host Frame:./check3 [0x7aaf]
+=========     Host Frame:/lib/x86_64-linux-gnu/libc.so.6 (__libc_start_main + 0xe7) [0x21c87]
+=========     Host Frame:./check3 [0x755a]
+=========
+========= ERROR SUMMARY: 33 errors
+```
+
+添加if语句后:
+
+```shell
+$ cuda-memcheck ./check4
+========= CUDA-MEMCHECK
+No errors
+========= ERROR SUMMARY: 0 errors
+```
+
 
 
 
