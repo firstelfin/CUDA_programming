@@ -33,8 +33,8 @@ int main(void)
 	const int block_size = 1280;
 	const int grid_size = N / block_size;
 	add<<<grid_size, block_size>>>(d_x, d_y, d_z);
-    CHECK(cudaGetLastError());
-    CHECK(cudaDeviceSynchronize());
+	CHECK(cudaGetLastError());
+	CHECK(cudaDeviceSynchronize());
 	CHECK(cudaMemcpy(h_z, d_z, M, cudaMemcpyDeviceToHost));
 	
 	check(h_z, N);
