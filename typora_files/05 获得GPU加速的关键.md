@@ -55,6 +55,84 @@ CHECK(cudaEventDestroy(stop));
 
 ## 5.1.1 为C++程序计时
 
+这里先考虑C++版本的程序。我们使用add1cpu.cu验证为C++程序计时，相对于第三章的add.cpp有如下的改动：
+
+* (1) 即使该程序没有核函数，我们也将源文件的扩展名写为`.cu`，这样就不用包含一些CUDA头文件了。若还是使用`.cpp`，用nvcc 编译时需要明确地增加一些头文件的包含，用gcc编译时还要明确地链接一些CUDA库。
+
+* (2) 从现在起，我们用调节编译的方式选择程序中所用浮点数的精度。在程序开头部分，添加如下几行代码：
+
+  ```c++
+  #ifdef USE_DP
+      typedef double real;
+      const real EPSILON = 1.0e-15;
+  #else
+      typedef float real;
+      const real EPSILON = 1.0e-6f;
+  #endif
+  ```
+
+  当宏USE_DP有定义时，程序的real代表double，否则代表float。该宏可以通过编译选项定义(具体见后吗的编译命令)。
+
+* (3) 我们用CUDA时间对该程序中函数add()的调用进行了计时，而且重复了11次。我们忽略第一次的时间，因为第一次机器可能处于预热状态，测得的时间往往偏大。我们根据后10次测得时间的平均值标记add的执行用时。详情参考add1cpp.cu(我的实现)、add1cpp_.cu(樊老师的实现)。
+
+
+
+**我们使用nvcc进行编译，需要注意以下几点：**
+
+* (1) C++程序的性能显著地依赖于优化选项，我们将总是使用`-O3`选项。
+* (2) 编译时使用`-DUSE_DP`的命令行参数，程序中的宏将有定义，从而使用双精度浮点数，否则使用单精度浮点数。
+
+编译命令：
+
+```shell
+$ nvcc -O3 -arch=sm_86  add1cpu.cu -o add1float
+$ ./add1float
+Time = 171.325 ms .
+No errors
+$ nvcc -O3 -arch=sm_86  add1cpu_.cu -o add1float_
+$ ./add1float_
+Time = 220.226 ms.
+Time = 87.8418 ms.
+Time = 88.4715 ms.
+Time = 89.0419 ms.
+Time = 88.2954 ms.
+Time = 86.6734 ms.
+Time = 86.9325 ms.
+Time = 86.8219 ms.
+Time = 87.2632 ms.
+Time = 87.2272 ms.
+Time = 87.2445 ms.
+Time = 87.5813 +- 0.7526 ms.
+No errors
+$ nvcc -O3 -arch=sm_86 -DUSE_DP  add1cpu.cu -o add1double
+$ ./add1double
+Time = 176.765 ms .
+No errors
+$ nvcc -O3 -arch=sm_86 -DUSE_DP  add1cpu_.cu -o add1double_
+$ ./add1double_
+Time = 399.767 ms.
+Time = 175.862 ms.
+Time = 175.972 ms.
+Time = 176.373 ms.
+Time = 175.953 ms.
+Time = 176.814 ms.
+Time = 176.315 ms.
+Time = 175.655 ms.
+Time = 176.055 ms.
+Time = 176.876 ms.
+Time = 175.824 ms.
+Time = 176.17 +- 0.392806 ms.
+No errors
+```
+
+这里add1cpu_.cu的双精度版本比单精度版本慢2倍，这和我们的预期是一样的，但是add1cpu.cu的双精度单精度却是一样的！这是为什么呢？
+
+TODO：执行时间一样问题查找？
+
+---
+
+
+
 
 
 
