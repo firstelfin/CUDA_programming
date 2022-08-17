@@ -264,7 +264,42 @@ CUDA Memory Operation Statistics (by time):
 
 
 
+>   如果上面的操作下面的错误提示：
+>
+>   ```shell
+>   $ nvprof ./add3float
+>   Unable to profile application. Unified Memory profiling faild
+>   # 可以尝试下面的命令
+>   $ nvprof --unified-memory-profiling ./add3float
+>   ```
 
+---
+
+<p align="right">
+    <b><a href="#top">Top</a></b>
+	&nbsp;<b>---</b>&nbsp;
+	<b><a href="#bottom">Bottom</a></b>
+</p>
+
+# 5.2 影响GPU加速的几个关键因素
+
+## 5.2.1 数据传输所占的比例
+
+如上一节所述，如果数据传输占了执行时间的大头，那GPU可能比CPU还慢。GPU计算核心和设备内存间的传输峰值理论带宽要远高于GPU与CPU之间数据传输的带宽。以我的3060为例，显存带宽为$360 \, \text{GB/s}$，而GPU与CPU内存的PCIe3只有$16 \, \text{GB/s}$。虽然现在是PCIe4和PCIe5，但是带宽也只有$64 \, \text{GB/s}$左右。这都远小于显存带宽，所以要获得客观的GPU加速，就必须尽量缩减数据传输所花时间的比例。有时，即使计算在GPU中的速度并不高，也要在尽量在GPU中实现，**避免过多的PCIe传输**。这是CUDA编程中重要的原则。
+
+
+
+## 5.2.2 算术强度
+
+​	一个计算问题的**算术强度**指的是其中**算术操作的工作量与必要的内存操作的工作量之比**。
+
+​	以3060为例，显存带宽为$360 \, \text{GB/s}$，理论寄存器带宽为：(3060的浮点性能为12.74TF)
+$$
+\frac{4\text{B} \times 4(每个FMA的操作数量)}{2(每个FMA浮点数操作次数)} \times 12.74 \times 10^{12} \text{/s} = 102 \, \text{TB/s}
+$$
+RTX2070的寄存器带宽是$52 \, \text{TB/s}$，3060几乎是翻了一倍，着实不错。但是前面的加法是计算强度小的案例，所以执行时间，3060并没有比2070有优势，理论上如果计算占比更高，那么3060的性能更好。这里的FMA是指fused multiply-add指令，及涉及4个操作数和两个浮点数操作的运算$d=a\times b + c$。说明这里GPU的浮点数计算比GPU的数据存取要快290多倍。如果是双精度浮点数，也要快几倍。注意RTX显卡不是算力卡，所以双精度计算性能很差，如果有双精度浮点数的计算需求，可以买Tesla这种卡。
+
+为了增加计算强度，我们进行如下的修改。
 
 
 
