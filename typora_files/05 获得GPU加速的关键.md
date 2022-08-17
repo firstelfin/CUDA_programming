@@ -133,9 +133,134 @@ No errors
 
 ---
 
+<p align="right">
+    <b><a href="#top">Top</a></b>
+	&nbsp;<b>---</b>&nbsp;
+	<b><a href="#bottom">Bottom</a></b>
+</p>
+
+## 5.1.2 为CUDA程序计时
+
+类似C++程序计时，我们在第四章的check1api.cu的基础上进行修改，用CUDA时间对其中的核函数add()进行计时，从而得到本章的add2gpu.cu程序。我们用如下命令进行编译：
+
+```shell
+$ nvcc -arch=sm_86 -DUSE_DP add2gpu.cu -o add2double
+$ ./add2double 
+Time = 7.56797 ms.
+Time = 7.97798 ms.
+Time = 7.53677 ms.
+Time = 7.83462 ms.
+Time = 7.50899 ms.
+Time = 8.01997 ms.
+Time = 7.13699 ms.
+Time = 7.88416 ms.
+Time = 7.13318 ms.
+Time = 7.72618 ms.
+Time = 7.13318 ms.
+Time = 7.5892 +- 0.336505 ms.
+No errors
+$ nvcc -arch=sm_86 add2gpu.cu -o add2float
+$ ./add2float
+Time = 3.57258 ms.
+Time = 3.57251 ms.
+Time = 3.6248 ms.
+Time = 3.57923 ms.
+Time = 3.57069 ms.
+Time = 3.58179 ms.
+Time = 3.57171 ms.
+Time = 3.61546 ms.
+Time = 3.58067 ms.
+Time = 4.18131 ms.
+Time = 3.56659 ms.
+Time = 3.64448 +- 0.179908 ms.
+No errors
+```
+
+这里双精度的执行时间几乎是单精度的两倍，符合我们的预期。
+
+​	这里我测试的显卡是RTX3060，显存带宽360GB/s。我们可以计算有效显存带宽，并与理论显存带宽进行比较。有效显存带宽的定义为GPU在单位时间内访问设备内存的字节。以RTX3060为例：
+$$
+\frac{3 \times 10^{8} \times 4 \text{B}}{3.64  \times 10^{-3}} = 326 \,\text{GB/s}
+$$
+可见有效显存要小于理论显存，这也说明了我们的add2gpu.cu是访存主导，浮点数运算所占比例可以忽略不计。(你可以这样理解，显存带宽有效值肯定比理论值小，我们就按照360去算访问显存占用的时间差不多在3.3ms，这样计算就只有0.34ms)。
+
+除了访问显存是核函数执行的重要占时操作，我们想看一下数据从主机拷贝到设备上的用时。这里我们使用add3memcpy.cu进行测试。
+
+```shell
+$ nvcc -arch=sm_86 add3memcpy.cu -o add3float
+$ ./add3float 
+Time = 289.711 ms.
+Time = 117.61 ms.
+Time = 118.675 ms.
+Time = 117.929 ms.
+Time = 118.078 ms.
+Time = 118.026 ms.
+Time = 118.094 ms.
+Time = 119.088 ms.
+Time = 118.102 ms.
+Time = 118.037 ms.
+Time = 118.33 ms.
+Time = 118.197 +- 0.392806 ms.
+No errors
+$ nvcc -arch=sm_86 -DUSE_DP add3memcpy.cu -o add3double
+$ ./add3double 
+Time = 570.68 ms.
+Time = 232.299 ms.
+Time = 232.803 ms.
+Time = 232.926 ms.
+Time = 234.929 ms.
+Time = 235.058 ms.
+Time = 233.646 ms.
+Time = 233.025 ms.
+Time = 232.505 ms.
+Time = 231.835 ms.
+Time = 231.913 ms.
+Time = 233.094 +- 1.07165 ms.
+No errors
+```
+
+根据以上结果我们不难看出，核函数的执行时间不到数据复制的4%。程序相对于C++程序不是性能提升而是性能降低。如果一个程序的计算任务仅仅是将来自主机端的两个数组相加，并要将结果传回主机端，使用GPU就不是一个明智的选择。那么什么样的任务使用GPU可以加速呢？这个我们需要通过nvprof工具进行分析。
+
+**CUDA程序的性能剖析**
+
+```shell
+$ nvprof ./add3float
+======== Warning: nvprof is not supported on devices with compute capability 8.0 and higher.
+                  Use NVIDIA Nsight Systems for GPU tracing and CPU sampling and NVIDIA Nsight Compute for GPU profiling.
+                  Refer https://developer.nvidia.com/tools-overview for more details.
+# 这里给出了工具不适配的警告，nvprof工具不支持计算能力8.0之上的，RTX3060计算能力应该是8.0
+$ nsys nvprof ./add3float
+CUDA API Statistics:
+
+ Time(%)  Total Time (ns)  Num Calls    Average      Minimum      Maximum            Name        
+ -------  ---------------  ---------  ------------  ----------  -----------  --------------------
+    88.8    1,495,744,336         33  45,325,585.9  35,201,658  210,137,518  cudaMemcpy          
+    10.9      183,403,542          3  61,134,514.0     412,713  182,565,956  cudaMalloc          
+     0.2        4,039,907          3   1,346,635.7     494,647    1,997,116  cudaFree            
+     0.0          301,560         11      27,414.5      26,690       29,114  cudaLaunchKernel    
+     0.0           92,742         22       4,215.5       1,652        9,172  cudaEventRecord     
+     0.0           79,943         22       3,633.8         421       13,632  cudaEventCreate     
+     0.0           32,765         22       1,489.3         417       12,990  cudaEventDestroy    
+     0.0           30,179         11       2,743.5       2,493        3,556  cudaEventSynchronize
+     0.0           11,574         11       1,052.2         759        1,997  cudaEventQuery
+CUDA Kernel Statistics:
+
+ Time(%)  Total Time (ns)  Instances    Average     Minimum    Maximum                       Name                    
+ -------  ---------------  ---------  -----------  ---------  ---------  --------------------------------------------
+   100.0       39,326,716         11  3,575,156.0  3,565,614  3,610,350  add(float const*, float const*, float*, int)
 
 
 
+CUDA Memory Operation Statistics (by time):
+
+ Time(%)  Total Time (ns)  Operations    Average      Minimum      Maximum        Operation     
+ -------  ---------------  ----------  ------------  ----------  -----------  ------------------
+    63.9      927,914,267          22  42,177,921.2  41,430,370   42,973,257  [CUDA memcpy HtoD]
+    36.1      523,959,305          11  47,632,664.1  31,440,315  205,787,528  [CUDA memcpy DtoH]
+
+```
+
+这里将所有操作的时间都列出来了，但是核函数和数据传输没有放一起比较，我们可以简单计算出，核函数执行时间只占主机拷贝数据到设备执行时间的4.24%。这个比例非常小，所以这种操作不适合使用GPU进行计算。
 
 
 
