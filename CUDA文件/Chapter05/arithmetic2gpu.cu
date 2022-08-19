@@ -12,9 +12,14 @@ const real a = 1.23;
 const real x0=10.0;
 void __global__ arithmetic(real *d_x, const real x0, const int N);
 
-int main(void)
+int main(int argc, char **argv)
 {
-    const int N = 100000000;
+    if (argc != 2) 
+    {
+        printf("usage: %s N\n", argv[0]);
+        exit(1);
+    }
+    const int N = atoi(argv[1]);
     const int M = sizeof(real) * N;
     real *h_x = (real*) malloc(M);
 
@@ -27,7 +32,7 @@ int main(void)
     CHECK(cudaMalloc((void **)&d_x, M));
     CHECK(cudaMemcpy(d_x, h_x, M, cudaMemcpyHostToDevice));
 
-    const int block_size = 128;
+    const int block_size = 1024;
     const int grid_size = (N + block_size - 1) / block_size;
 
 
@@ -38,6 +43,8 @@ int main(void)
     cudaEventQuery(start);
 
     arithmetic<<<grid_size, block_size>>>(d_x, x0, N);
+    CHECK(cudaGetLastError());
+	CHECK(cudaDeviceSynchronize());
 
     CHECK(cudaEventRecord(stop));
     CHECK(cudaEventSynchronize(stop));

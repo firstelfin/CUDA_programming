@@ -301,7 +301,127 @@ RTX2070的寄存器带宽是$52 \, \text{TB/s}$，3060几乎是翻了一倍，�
 
 为了增加计算强度，我们进行如下的修改。
 
+**arithmetic1cpu.cu中的arithmetic函数**
 
+```c++
+void arithmetic(real *x, const real x0, const int N)
+{
+    for (int n = 0; n  < N; ++n)
+    {
+        real x_temp = x[n];
+        while (sqrt(x_temp) < x0)
+        {
+            ++x_temp;
+        }
+        x[n] = x_temp;
+    }
+}
+```
+
+**arithmetic2gpu.cu中的arithmetic函数**
+
+```c++
+void __global__ arithmetic(real *d_x, const real x0, const int N)
+{
+    const int n = blockDim.x  * blockIdx.x + threadIdx.x;
+    if (n>=N) return;
+    real x_temp = d_x[n];
+    while (sqrt(x_temp) < x0)
+    {
+        ++x_temp;
+    }
+    d_x[n] = x_temp;
+}
+```
+
+​	这里有个real类型的常亮$x0$，控制着加法计算的次数(相当于之前的外层循环，增加计算强度)。要注意的是循环条件中有sqrt()函数，源书籍中常量为100，那就会循环10000次，我的设备c++程序耗不起，所以将常量设为10，只循环100次。
+
+**编译执行结果：**
+
+```shell
+$ nvcc -O3 -arch=sm_80 arithmetic1cpu.cu -o arithmetic1float
+$ ./arithmetic1float 
+Time = 42510.5 ms .
+```
+
+在CUDA版本中，我们加入了如下的代码块控制N从命令行获取数值：
+
+```c++
+if (argc != 2) 
+    {
+        printf("usage: %s N\n", argv[0]);
+        exit(1);
+    }
+    const int N = atoi(argv[1]);
+```
+
+所以编译后，执行的时候要添加命令行参数N
+
+```shell
+$ nvcc -arch=sm_80 arithmetic1cpu.cu -o arithmetic1float
+$ nvcc -O3 -arch=sm_80 arithmetic1cpu.cu -o arithmetic1float
+$ nvcc -O3 -USE_DP -arch=sm_80 arithmetic1cpu.cu -o arithmetic1double
+$ nvcc -O3 -arch=sm_80 arithmetic2gpu.cu -o arithmetic2float
+$ nvcc -O3 -USE_DP -arch=sm_80 arithmetic2gpu.cu -o arithmetic2double
+$ ./arithmetic1float 10000
+Time = 5.39046 ms .
+$ ./arithmetic2float 10000
+Time = 0.023936 ms.
+$ ./arithmetic1double 10000
+Time = 8.14582 ms .
+$ ./arithmetic2double 10000
+Time = 0.142912 ms.
+```
+
+测试中：当数组长度为$10^{4}$时，主机函数的执行时间是5.39046 ms（单精度）和8.14582 ms（双精度）；CUDA程序的执行时间是0.023936 ms（单精度）和0.142912 ms（双精度）。所以单精度浮点数和双精度浮点数的加速比为：
+
+单精度：
+$$
+\frac{5.39046}{0.023936}=225
+$$
+双精度：
+$$
+\frac{8.14582}{0.142912}=57
+$$
+我们可以看到算数强度的提高，加速比也极大地提高了。当N为$10^{6}$时，单精度、双精度的加速比分别为1681、58。可以发现单精度版本提升计算强度，加速效果比双精度好太多，注意我使用的是RTX3060(这种个人游戏卡对双精度计算几乎是啥优化)。在RTX3060显卡中核函数双精度与单精度的执行时间比是44倍，还是比较接近理论的32倍，所以侧面印证了这个核函数是计算主导的。Tesla V100双精度是单精度的2倍，其他方面并没有突出优势，所以对于AI计算，GeForce系列显卡性价比还是要高一些。
+
+---
+
+<p align="right">
+    <b><a href="#top">Top</a></b>
+	&nbsp;<b>---</b>&nbsp;
+	<b><a href="#bottom">Bottom</a></b>
+</p>
+
+## 5.2.3 并行规模
+
+​	影响CUDA程序性能的另一个因素是并行规模。并行规模可以用GPU中总的线程数目来衡量。从硬件上说，一个GPU由多个流处理器(SM)构成，而每个SM中有若干CUDA核心。每个SM是相对独立的。从开普勒到伏特架构，一个SM最多能驻留2048个线程；现在我们使用的图灵、安培架构是1024.一块GPU中一般有几个到几十个SM单元。所以一个显卡一共可以驻留几万到几十万个线程，如果一个核函数定义的线程数目远小于这个数，就很难获得很高的加速比。
+
+​	为了测试RTX3060，这里我们将N从$10^{3}$逐渐增到到$10^{8}$，观察核函数的执行时间和加速比：
+
+
+
+---
+
+<p align="right">
+    <b><a href="#top">Top</a></b>
+	&nbsp;<b>---</b>&nbsp;
+	<b><a href="#bottom">Bottom</a></b>
+</p>
+
+## 5.2.4 总结
+
+一个CUDA程序能获得高性能必须满足以下几点：
+
+* (1) 数据传输比例较小；
+* (2) 核函数的算术强度较高；
+* (3) 核函数中定义的线程数目较多。
+
+所以在写CUDA程序时，应该做到以下几点：
+
+* (1) 减少设备与主机之间的数据传输；
+* (2) 提高核函数的算术强度；
+* (3) 增大核函数的并行规模。
 
 
 

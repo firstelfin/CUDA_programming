@@ -14,9 +14,14 @@ const real x0=10.0;
 
 void arithmetic(real *x, const real x0, const int N);
 
-int main(void)
+int main(int argc, char **argv)
 {
-	const int N = 1e8;
+	if (argc != 2) 
+    {
+        printf("usage: %s N\n", argv[0]);
+        exit(1);
+    }
+    const int N = atoi(argv[1]);
 	const int M = sizeof(real) * N;
 	real  *x = (real *) malloc(M);
 	for (int n = 0; n < N; ++n)
