@@ -399,6 +399,14 @@ $$
 
 ​	为了测试RTX3060，这里我们将N从$10^{3}$逐渐增到到$10^{8}$，观察核函数的执行时间和加速比：
 
+[](./images/kernel.jpg)
+
+[](./images/cpp.jpg)
+
+[](./images/kernel_ratio.jpg)
+
+这里我和作者的图像不太一样！核函数在线程数增多时，执行时间几乎也线性增长了；加速比是一条直线，说明计算强度越大，加速越明显。
+
 
 
 ---
@@ -432,15 +440,43 @@ $$
 	&nbsp;<b>---</b>&nbsp;
 	<b><a href="#bottom">Bottom</a></b>
 </p>
+# 5.3 CUDA函数中的数学库
+
+官方提供的数学算子参考：https://docs.nvidia.com/cuda/cuda-math-api
+
+CUDA数学库中的函数可以归纳如下：
+
+*   (1) 单精度浮点数内建函数和数学函数。使用时不需要包含任何额外的头文件。
+*   (2) 双精度浮点数内建函数和数学函数。使用时不需要包含任何额外的头文件。
+*   (3) 半精度浮点数内建函数和数学函数。使用时需要包含额外的头文件`<cuda_fp16.h>`。
+*   (4) 整数类型的内建函数。使用时不需要包含任何额外的头文件。
+*   (5) 类型转换的内建函数。使用时不需要包含任何额外的头文件。
+*   (6) “单指令-多数据”内建函数。使用时不需要包含任何额外的头文件。
+
+本学习材料只会涉及单精度浮点数和双精度浮点数类型的数学函数和内建函数。其中，数学函数都是经过重载的。例如求平方根的函数具有如下3种原型：
+
+*   double sqrt(double x);
+*   float sqrt(float x);
+*   float sqrtf(float x);
+
+所以当x是双精度时，我们只能使用sqrt()函数；当x是单精度时，我们可以使用sqrt()函数或sqrtf()函数。因此我们统一使用sqrt()函数。
 
 
 
+内建函数指的是一些准确度较低，但效率较高的函数。例如有如下的平方根内建函数：
 
+```c++
+float __fsqrt_rd (float x);       // round-down mode
+float __fsqrt_rn (float x);       // round-to-nearest-even mode
+float __fsqrt_ru (float x);       // round-up mode
+float __fsqrt_rz (float x);       // round-towards-zero mode
+double __fsqrt_rd (double x);     // round-down mode
+double __fsqrt_rn (double x);     // round-to-nearest-even mode
+double __fsqrt_ru (double x);     // round-up mode
+double __fsqrt_rz (double x);     // round-towards-zero mode
+```
 
-
-
-
-
+在开发CUDA程序时，浮点数精度的选择及数学函数和内建函数之间的选择都要视应用程序要求而定。当对计算精度要求较高，就需要使用双精度，且不使用内建函数了。
 
 
 
